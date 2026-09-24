@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dashboard Hidrandina — Consumo y Facturación</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0c1a24; --panel:#12242f; --panel2:#0f2430;
+  --line:#25404d; --amber:#f2b705; --teal:#3ecf8e;
+  --text:#e8eef0; --sub:#8fa8b3;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){ --bg:#0c1a24; --panel:#12242f; --panel2:#0f2430; --text:#e8eef0; } }
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',system-ui,sans-serif;min-height:100%}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 60px}
+header{border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:22px;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:10px}
+h1{font-size:1.5rem;margin:0 0 4px;font-weight:700;letter-spacing:.2px}
+header p{margin:0;color:var(--sub);font-size:.88rem}
+.badge{font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--amber);border:1px solid var(--amber);padding:3px 9px;border-radius:3px}
+.filters{display:flex;gap:22px;flex-wrap:wrap;margin-bottom:24px;background:var(--panel);border:1px solid var(--line);padding:14px 18px;border-radius:6px}
+.filter-group{display:flex;flex-direction:column;gap:6px}
+.filter-group span{font-size:.7rem;color:var(--sub);text-transform:uppercase;letter-spacing:.06em}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-family:'IBM Plex Mono',monospace;font-size:.75rem;padding:5px 11px;border-radius:3px;border:1px solid var(--line);background:transparent;color:var(--sub);cursor:pointer;transition:.15s}
+.chip.active{background:var(--amber);color:#0c1a24;border-color:var(--amber);font-weight:600}
+.chip:hover{border-color:var(--amber)}
+.reset{margin-left:auto;align-self:center;background:none;border:1px solid var(--line);color:var(--sub);font-family:'IBM Plex Sans';font-size:.8rem;padding:6px 14px;border-radius:3px;cursor:pointer}
+.reset:hover{color:var(--text);border-color:var(--sub)}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--teal);padding:16px 18px;border-radius:4px}
+.kpi:nth-child(3),.kpi:nth-child(4){border-left-color:var(--amber)}
+.kpi span{display:block;font-size:.72rem;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+.kpi b{font-family:'IBM Plex Mono',monospace;font-size:1.5rem;font-weight:600}
+.grid{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;margin-bottom:14px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:16px 18px}
+.panel h3{margin:0 0 12px;font-size:.85rem;color:var(--sub);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.panel-wide{grid-column:1/-1}
+canvas{max-height:280px}
+footer{margin-top:26px;color:var(--sub);font-size:.78rem;border-top:1px solid var(--line);padding-top:14px;line-height:1.5}
+@media(max-width:760px){.kpis{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div><h1>Consumo y Facturación — Hidrandina</h1><p>Data Warehouse dimensional · Periodo de facturación 2022-10</p></div>
+  <span class="badge">6 KPI · 3 tipos de gráfico</span>
+</header>
+
+<div class="filters">
+  <div class="filter-group"><span>Departamento</span><div class="chips" id="f-dep"></div></div>
+  <div class="filter-group"><span>Tarifa</span><div class="chips" id="f-tar"></div></div>
+  <div class="filter-group"><span>Cartera</span><div class="chips" id="f-car"></div></div>
+  <button class="reset" onclick="resetFilters()">Limpiar filtros</button>
+</div>
+
+<div class="kpis">
+  <div class="kpi"><span>KPI-01 · Consumo total</span><b id="k1">—</b></div>
+  <div class="kpi"><span>KPI-02 · Consumo prom. / registro</span><b id="k2">—</b></div>
+  <div class="kpi"><span>KPI-03 · Importe total</span><b id="k3">—</b></div>
+  <div class="kpi"><span>KPI-04 · Importe prom. / registro</span><b id="k4">—</b></div>
+</div>
+
+<div class="grid">
+  <div class="panel"><h3>KPI-05 · Consumo por tarifa (barras)</h3><canvas id="c-tarifa"></canvas></div>
+  <div class="panel"><h3>KPI-06 · Consumo por departamento (dona)</h3><canvas id="c-dep"></canvas></div>
+</div>
+<div class="grid">
+  <div class="panel panel-wide"><h3>Tendencia diaria de consumo e importe (línea)</h3><canvas id="c-trend"></canvas></div>
+</div>
+
+<footer>
+  Fuente: Fact_ConsumoFacturacion, Dim_Ubicacion, Dim_Tarifa (Data Warehouse Hidrandina). Los promedios (KPI-02, KPI-04) se calculan por registro de facturación, ya que el campo NRO_SERVICIO llega anonimizado en el dataset. El periodo de facturación cargado corresponde a un único ciclo (202210); la tendencia usa la fecha de emisión, que sí varía día a día dentro de ese ciclo.
+</footer>
+</div>
+
+<script>
+if(typeof Chart === 'undefined'){
+  document.querySelectorAll('canvas').forEach(c=>{
+    const msg=document.createElement('p');
+    msg.style.cssText='color:#f2b705;font-family:IBM Plex Mono,monospace;font-size:.78rem';
+    msg.textContent='No se pudo cargar la librería de gráficos (Chart.js). Revisa tu conexión y recarga la página.';
+    c.replaceWith(msg);
+  });
+}
+const RAW = [{"FECHA_EMISION": "2022-10-22", "DEPARTAMENTO": "Cajamarca", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 13.0, "IMPORTE": 50.0, "N": 5}, {"FECHA_EMISION": "2022-10-22", "DEPARTAMENTO": "La Libertad", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 6433.0, "IMPORTE": 6781.1, "N": 38}, {"FECHA_EMISION": "2022-10-23", "DEPARTAMENTO": "Ancash", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 253.0, "IMPORTE": 229.6, "N": 9}, {"FECHA_EMISION": "2022-10-23", "DEPARTAMENTO": "La Libertad", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 7511.0, "IMPORTE": 8025.3, "N": 52}, {"FECHA_EMISION": "2022-10-24", "DEPARTAMENTO": "Ancash", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 807.0, "IMPORTE": 853.9000000000001, "N": 14}, {"FECHA_EMISION": "2022-10-24", "DEPARTAMENTO": "Cajamarca", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 30.0, "IMPORTE": 40.2, "N": 4}, {"FECHA_EMISION": "2022-10-24", "DEPARTAMENTO": "La Libertad", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 5488.0, "IMPORTE": 5820.3, "N": 41}, {"FECHA_EMISION": "2022-10-24", "DEPARTAMENTO": "La Libertad", "TARIFA": "BT6", "CARTERA": "COMUN", "CONSUMO": 1000.0, "IMPORTE": 356.1, "N": 1}, {"FECHA_EMISION": "2022-10-25", "DEPARTAMENTO": "Ancash", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 551.0, "IMPORTE": 533.7, "N": 17}, {"FECHA_EMISION": "2022-10-25", "DEPARTAMENTO": "Cajamarca", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 73.0, "IMPORTE": 95.6, "N": 9}, {"FECHA_EMISION": "2022-10-25", "DEPARTAMENTO": "La Libertad", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 1610.0, "IMPORTE": 1780.7, "N": 23}, {"FECHA_EMISION": "2022-10-26", "DEPARTAMENTO": "Ancash", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 329.0, "IMPORTE": 360.0, "N": 24}, {"FECHA_EMISION": "2022-10-26", "DEPARTAMENTO": "Cajamarca", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 209.0, "IMPORTE": 221.60000000000002, "N": 12}, {"FECHA_EMISION": "2022-10-26", "DEPARTAMENTO": "La Libertad", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 3196.0, "IMPORTE": 3391.8, "N": 28}, {"FECHA_EMISION": "2022-10-27", "DEPARTAMENTO": "Ancash", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 1361.0, "IMPORTE": 1403.5, "N": 31}, {"FECHA_EMISION": "2022-10-27", "DEPARTAMENTO": "Cajamarca", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 835.0, "IMPORTE": 891.0, "N": 11}, {"FECHA_EMISION": "2022-10-27", "DEPARTAMENTO": "La Libertad", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 3005.0, "IMPORTE": 3181.4, "N": 38}, {"FECHA_EMISION": "2022-10-28", "DEPARTAMENTO": "Ancash", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 1324.0, "IMPORTE": 1550.6, "N": 33}, {"FECHA_EMISION": "2022-10-28", "DEPARTAMENTO": "Cajamarca", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 1407.0, "IMPORTE": 1453.9, "N": 14}, {"FECHA_EMISION": "2022-10-28", "DEPARTAMENTO": "La Libertad", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 3395.0, "IMPORTE": 3675.3, "N": 35}, {"FECHA_EMISION": "2022-10-29", "DEPARTAMENTO": "Ancash", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 2965.0, "IMPORTE": 3092.4, "N": 32}, {"FECHA_EMISION": "2022-10-29", "DEPARTAMENTO": "Cajamarca", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 1008.0, "IMPORTE": 1085.3, "N": 20}, {"FECHA_EMISION": "2022-10-29", "DEPARTAMENTO": "La Libertad", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 2775.0, "IMPORTE": 3063.1, "N": 38}, {"FECHA_EMISION": "2022-10-30", "DEPARTAMENTO": "Ancash", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 1301.0, "IMPORTE": 1381.9, "N": 33}, {"FECHA_EMISION": "2022-10-30", "DEPARTAMENTO": "La Libertad", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 3812.0, "IMPORTE": 4139.4, "N": 35}, {"FECHA_EMISION": "2022-10-31", "DEPARTAMENTO": "Ancash", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 1954.0, "IMPORTE": 2165.9, "N": 28}, {"FECHA_EMISION": "2022-10-31", "DEPARTAMENTO": "Cajamarca", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 1441.0, "IMPORTE": 1602.5, "N": 14}, {"FECHA_EMISION": "2022-10-31", "DEPARTAMENTO": "La Libertad", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 6755.0, "IMPORTE": 7402.3, "N": 57}, {"FECHA_EMISION": "2022-11-01", "DEPARTAMENTO": "Ancash", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 4750.0, "IMPORTE": 5354.5, "N": 34}, {"FECHA_EMISION": "2022-11-01", "DEPARTAMENTO": "Cajamarca", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 953.0, "IMPORTE": 1014.3, "N": 13}, {"FECHA_EMISION": "2022-11-01", "DEPARTAMENTO": "La Libertad", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 4188.0, "IMPORTE": 4559.2, "N": 46}, {"FECHA_EMISION": "2022-11-02", "DEPARTAMENTO": "Ancash", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 1955.0, "IMPORTE": 3360.6, "N": 19}, {"FECHA_EMISION": "2022-11-02", "DEPARTAMENTO": "Cajamarca", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 2496.0, "IMPORTE": 2640.0, "N": 18}, {"FECHA_EMISION": "2022-11-02", "DEPARTAMENTO": "La Libertad", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 2361.0, "IMPORTE": 3157.1, "N": 47}, {"FECHA_EMISION": "2022-11-03", "DEPARTAMENTO": "Ancash", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 2045.0, "IMPORTE": 2256.2, "N": 27}, {"FECHA_EMISION": "2022-11-03", "DEPARTAMENTO": "Ancash", "TARIFA": "BT5D", "CARTERA": "COMUN", "CONSUMO": 2407.0, "IMPORTE": 1317.9, "N": 1}, {"FECHA_EMISION": "2022-11-03", "DEPARTAMENTO": "Cajamarca", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 1792.0, "IMPORTE": 1965.9, "N": 15}, {"FECHA_EMISION": "2022-11-03", "DEPARTAMENTO": "La Libertad", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 1769.0, "IMPORTE": 1924.7, "N": 31}, {"FECHA_EMISION": "2022-11-04", "DEPARTAMENTO": "Ancash", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 1718.0, "IMPORTE": 1738.4, "N": 25}, {"FECHA_EMISION": "2022-11-04", "DEPARTAMENTO": "Cajamarca", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 837.0, "IMPORTE": 888.8, "N": 10}, {"FECHA_EMISION": "2022-11-04", "DEPARTAMENTO": "La Libertad", "TARIFA": "BT5B", "CARTERA": "COMUN", "CONSUMO": 1546.0, "IMPORTE": 1620.9, "N": 16}, {"FECHA_EMISION": "2022-11-05", "DEPARTAMENTO": "Cajamarca", "TARIFA": "MT3", "CARTERA": "MAYOR", "CONSUMO": 504.0, "IMPORTE": 393.7, "N": 1}, {"FECHA_EMISION": "2022-11-05", "DEPARTAMENTO": "La Libertad", "TARIFA": "BT3", "CARTERA": "MAYOR", "CONSUMO": 0.0, "IMPORTE": 206.5, "N": 1}];
+const nf = new Intl.NumberFormat('es-PE');
+let sel = {dep:new Set(), tar:new Set(), car:new Set()};
+
+function uniq(k){ return [...new Set(RAW.map(r=>r[k]))].sort(); }
+function buildChips(id, key){
+  const el = document.getElementById(id);
+  uniq(key).forEach(v=>{
+    const b=document.createElement('button');
+    b.className='chip'; b.textContent=v; b.dataset.v=v;
+    b.onclick=()=>{ sel[key==='DEPARTAMENTO'?'dep':key==='TARIFA'?'tar':'car'].has(v) ? toggle(b,key,v,false) : toggle(b,key,v,true); render(); };
+    el.appendChild(b);
+  });
+}
+function toggle(btn,key,v,on){
+  const s = sel[key==='DEPARTAMENTO'?'dep':key==='TARIFA'?'tar':'car'];
+  on ? s.add(v) : s.delete(v);
+  btn.classList.toggle('active',on);
+}
+function resetFilters(){
+  sel={dep:new Set(),tar:new Set(),car:new Set()};
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  render();
+}
+function filtered(){
+  return RAW.filter(r =>
+    (sel.dep.size===0 || sel.dep.has(r.DEPARTAMENTO)) &&
+    (sel.tar.size===0 || sel.tar.has(r.TARIFA)) &&
+    (sel.car.size===0 || sel.car.has(r.CARTERA))
+  );
+}
+let chTarifa, chDep, chTrend;
+function render(){
+  const d = filtered();
+  const consumo = d.reduce((a,r)=>a+r.CONSUMO,0);
+  const importe = d.reduce((a,r)=>a+r.IMPORTE,0);
+  const n = d.reduce((a,r)=>a+r.N,0) || 1;
+  document.getElementById('k1').textContent = nf.format(Math.round(consumo))+' KWh';
+  document.getElementById('k2').textContent = nf.format((consumo/n).toFixed(1))+' KWh';
+  document.getElementById('k3').textContent = 'S/ '+nf.format(importe.toFixed(2));
+  document.getElementById('k4').textContent = 'S/ '+nf.format((importe/n).toFixed(2));
+
+  const byTarifa={}, byDep={}, byDate={};
+  d.forEach(r=>{
+    byTarifa[r.TARIFA]=(byTarifa[r.TARIFA]||0)+r.CONSUMO;
+    byDep[r.DEPARTAMENTO]=(byDep[r.DEPARTAMENTO]||0)+r.CONSUMO;
+    if(!byDate[r.FECHA_EMISION]) byDate[r.FECHA_EMISION]={c:0,i:0};
+    byDate[r.FECHA_EMISION].c+=r.CONSUMO; byDate[r.FECHA_EMISION].i+=r.IMPORTE;
+  });
+  const dates = Object.keys(byDate).sort();
+  const palette=['#f2b705','#3ecf8e','#5aa9e6','#e4572e'];
+
+  const mk=(ctx,cfg)=>new Chart(ctx,cfg);
+  if(chTarifa) chTarifa.destroy();
+  chTarifa = mk(document.getElementById('c-tarifa'), {type:'bar',
+    data:{labels:Object.keys(byTarifa), datasets:[{data:Object.values(byTarifa), backgroundColor:'#f2b705'}]},
+    options:{plugins:{legend:{display:false}}, scales:{x:{ticks:{color:'#8fa8b3'},grid:{color:'#1c3440'}},y:{ticks:{color:'#8fa8b3'},grid:{color:'#1c3440'}}}}
+  });
+  if(chDep) chDep.destroy();
+  chDep = mk(document.getElementById('c-dep'), {type:'doughnut',
+    data:{labels:Object.keys(byDep), datasets:[{data:Object.values(byDep), backgroundColor:palette}]},
+    options:{plugins:{legend:{position:'bottom',labels:{color:'#8fa8b3',boxWidth:12}}}}
+  });
+  if(chTrend) chTrend.destroy();
+  chTrend = mk(document.getElementById('c-trend'), {type:'line',
+    data:{labels:dates, datasets:[
+      {label:'Consumo (KWh)',data:dates.map(x=>byDate[x].c),borderColor:'#3ecf8e',backgroundColor:'#3ecf8e22',tension:.25,yAxisID:'y'},
+      {label:'Importe (S/)',data:dates.map(x=>byDate[x].i),borderColor:'#f2b705',backgroundColor:'#f2b70522',tension:.25,yAxisID:'y1'}
+    ]},
+    options:{interaction:{mode:'index',intersect:false},
+      plugins:{legend:{labels:{color:'#8fa8b3'}}},
+      scales:{x:{ticks:{color:'#8fa8b3'},grid:{color:'#1c3440'}},
+        y:{position:'left',ticks:{color:'#8fa8b3'},grid:{color:'#1c3440'}},
+        y1:{position:'right',ticks:{color:'#8fa8b3'},grid:{display:false}}}}
+  });
+}
+buildChips('f-dep','DEPARTAMENTO'); buildChips('f-tar','TARIFA'); buildChips('f-car','CARTERA');
+render();
+</script>
+</body>
+</html>
